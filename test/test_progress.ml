@@ -43,6 +43,18 @@ let tests =
             (Progress.indicator_line 24 '|' "working" "/tmp/some/deep/path");
           check_string "message clipped to the width" "| scanni"
             (Progress.indicator_line 8 '|' "scanning, 12 entries" ""));
+      it "draws a bar for a known total" (fun () ->
+          check_string "empty" "[....................] 0/4" (Progress.bar_text 0 4);
+          check_string "quarter" "[#####...............] 1/4" (Progress.bar_text 1 4);
+          check_string "full" "[####################] 4/4" (Progress.bar_text 4 4);
+          check_string "overrun is clamped" "[####################] 5/4" (Progress.bar_text 5 4);
+          check_string "in the line" "| [##########..........] 2/4 removing  /tmp/x"
+            (Progress.indicator_line ~bar:(2, 4) 80 '|' "removing" "/tmp/x");
+          check_string "hidden without a total" "| removing"
+            (Progress.indicator_line ~bar:(0, 0) 80 '|' "removing" ""));
+      it "formats elapsed time" (fun () ->
+          check_string "seconds" "42s" (Progress.elapsed 42.9);
+          check_string "minutes" "3m05s" (Progress.elapsed 185.));
       it "stays silent when stderr is not a terminal" (fun () ->
           let written, () =
             capture_stderr (fun () ->

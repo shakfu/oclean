@@ -60,7 +60,8 @@ let counter = ref 0
 let rec fresh_dir () =
   incr counter;
   let dir =
-    Filename.concat (Filename.get_temp_dir_name ())
+    (* Resolved, so paths match what the binary derives from getcwd (macOS /var). *)
+    Filename.concat (Unix.realpath (Filename.get_temp_dir_name ()))
       (Printf.sprintf "oclean-test-%d-%d" (Unix.getpid ()) !counter)
   in
   match Sys.mkdir dir 0o755 with () -> dir | exception Sys_error _ -> fresh_dir ()

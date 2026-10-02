@@ -26,7 +26,11 @@ Run `oclean --help` for the full option list.
 
 Matches are printed on stdout. The confirmation prompt (`Delete N item(s)? [y/N]`) goes to stderr, so stdout carries only the report. With `--format json` the report is printed after removal, and its `failures` array lists every target that could not be removed. A failed removal does not stop the run; oclean removes what it can, then exits 1.
 
-While scanning or removing, oclean shows an activity indicator on stderr: a spinner, a running count and the current path. It appears only when stderr is a terminal and the work has run for 0.25 s, and is erased before results are printed. `--progress` forces reporting off a terminal, as one `scanned N entries` line at the end; `--no-progress` disables it.
+While scanning or removing, oclean shows an activity indicator on stderr: a spinner, counts, elapsed time and the current path. Removal adds a progress bar. It appears only when stderr is a terminal and the work has run for 0.25 s, and is erased before results are printed. `--progress` forces reporting off a terminal, as one `scanned N entries` line at the end; `--no-progress` disables it.
+
+- Scanning shows entries visited and matches found. It has no bar, since the total is unknown until the walk ends.
+
+- Removal's bar counts targets. With `--stats` or `--format json`, bytes processed are shown against the total. Bytes of a target that failed to be removed are included.
 
 ## Patterns
 

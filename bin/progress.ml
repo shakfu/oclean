@@ -8,6 +8,7 @@ type t = {
   mutable count : int;
   mutable message : int -> string;
   mutable path : string;
+  mutable bar : (int * int) option;  (** Steps done and total. *)
   mutable frame : int;
   mutable painted : bool;
   mutable last_paint : float;
@@ -31,8 +32,22 @@ let shorten width path =
     let i = start (n - width + 3) in
     "..." ^ String.sub path i (n - i)
 
-let indicator_line width frame message path =
-  let prefix = Printf.sprintf "%c %s" frame message in
+let bar_width = 20
+
+let bar_text done_ total =
+  let filled = bar_width * max 0 (min done_ total) / total in
+  Printf.sprintf "[%s%s] %d/%d" (String.make filled '#') (String.make (bar_width - filled) '.') done_ total
+
+let elapsed secs =
+  let s = int_of_float secs in
+  if s < 60 then Printf.sprintf "%ds" s else Printf.sprintf "%dm%02ds" (s / 60) (s mod 60)
+
+let indicator_line ?bar width frame message path =
+  let prefix =
+    match bar with
+    | Some (done_, total) when total > 0 -> Printf.sprintf "%c %s %s" frame (bar_text done_ total) message
+    | _ -> Printf.sprintf "%c %s" frame message
+  in
   let room = width - String.length prefix - 2 in
   if path = "" || room < 12 then String.sub prefix 0 (min width (String.length prefix))
   else prefix ^ "  " ^ shorten room path
@@ -53,7 +68,10 @@ let repaint t =
     let now = Unix.gettimeofday () in
     if now -. t.started >= startup_delay && now -. t.last_paint >= repaint_interval then (
       prerr_string
-        ("\r" ^ indicator_line t.width (spinner_frame t.frame) (t.message t.count) t.path);
+        ("\r"
+        ^ indicator_line ?bar:t.bar t.width (spinner_frame t.frame)
+            (t.message t.count ^ ", " ^ elapsed (now -. t.started))
+            t.path);
       flush stderr;
       t.frame <- t.frame + 1;
       t.painted <- true;
@@ -71,6 +89,10 @@ let tick t path =
 
 let set_message t message = t.message <- message
 
+let set_bar t done_ total =
+  t.bar <- (if total > 0 then Some (done_, total) else None);
+  repaint t
+
 let note t msg =
   erase t;
   prerr_endline msg
@@ -86,6 +108,7 @@ let with_progress mode ~message ~summary f =
       count = 0;
       message;
       path = "";
+      bar = None;
       frame = 0;
       painted = false;
       last_paint = neg_infinity;

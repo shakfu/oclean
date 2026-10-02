@@ -10,6 +10,13 @@ let tests =
               check_bool "no failures" (Delete.remove_all [ target (root / "d"); target (root / "f") ] = []);
               check_bool "directory gone" (not (Sys.file_exists (root / "d")));
               check_bool "file gone" (not (Sys.file_exists (root / "f")))));
+      it "reports every path it removes" (fun () ->
+          with_tree [ ("d/a", "1"); ("d/e/b", "2") ] (fun root ->
+              let visited = ref [] in
+              ignore (Delete.remove_all ~on_visit:(fun p -> visited := p :: !visited) [ target (root / "d") ]);
+              check_strings "parent first, then children"
+                [ root / "d"; root / "d/a"; root / "d/e"; root / "d/e/b" ]
+                (List.sort String.compare !visited)));
       it "removes a symlink, not what it points to" (fun () ->
           with_tree [ ("real/keep", "1") ] (fun root ->
               Unix.symlink (root / "real") (root / "link");

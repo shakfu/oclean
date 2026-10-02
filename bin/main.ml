@@ -39,19 +39,30 @@ let confirm (opts : Options.t) count =
    | Some answer -> List.mem (String.lowercase_ascii (String.trim answer)) [ "y"; "yes" ]
    | None -> false)
 
+(* Sizes are known only with --stats or JSON; measuring walks every match. *)
+let measured (opts : Options.t) = opts.stats || opts.format = Json
+
 let remove (inv : Cli.t) (opts : Options.t) (targets : Target.t list) =
   let total = List.length targets in
   if opts.dry_run || total = 0 || not (confirm opts total) then []
   else
-    Progress.with_progress inv.progress
-      ~message:(fun n -> Printf.sprintf "removing, %d of %d" n total)
-      ~summary:(fun _ -> None)
-      (fun p ->
+    let total_size = List.fold_left (fun n (t : Target.t) -> n + t.size) 0 targets in
+    (* [on_remove] runs before each attempt, so the previous target is done. *)
+    let started = ref 0 and freed = ref 0 and current = ref 0 in
+    let message _ =
+      if measured opts then
+        Printf.sprintf "removing, %s of %s" (Report.format_size !freed) (Report.format_size total_size)
+      else "removing"
+    in
+    Progress.with_progress inv.progress ~message ~summary:(fun _ -> None) (fun p ->
         let on_remove (t : Target.t) =
-          Progress.tick p t.path;
+          freed := !freed + !current;
+          current := t.size;
+          Progress.set_bar p !started total;
+          incr started;
           if inv.verbose then Progress.note p ("removing " ^ t.path)
         in
-        let failures = Delete.remove_all ~on_remove targets in
+        let failures = Delete.remove_all ~on_remove ~on_visit:(Progress.show p) targets in
         if inv.verbose then
           Progress.note p (Printf.sprintf "removed %d item(s)" (total - List.length failures));
         failures)
@@ -60,23 +71,22 @@ let clean (inv : Cli.t) (opts : Options.t) patterns excludes =
   let dir = Options.root opts in
   if not (Sys.file_exists dir && Sys.is_directory dir) then die ("invalid path: " ^ dir);
   let root = Util.absolute dir in
+  let matches = ref 0 in
   let summary =
     Progress.with_progress inv.progress
-      ~message:(Printf.sprintf "scanning, %d entries")
+      ~message:(fun n -> Printf.sprintf "scanning, %d entries, %d matches" n !matches)
       ~summary:(fun n -> Some (Printf.sprintf "scanned %d entries" n))
       (fun p ->
         let note msg = if inv.verbose then Progress.note p msg in
         note ("root: " ^ root);
         note ("patterns: " ^ String.concat ", " (List.map Glob.source patterns));
         let on_match (t : Target.t) =
+          incr matches;
           note (Printf.sprintf "match: %s (%s)" t.path (Target.label t.reason))
         in
         let targets = Scan.scan ~on_visit:(Progress.tick p) ~on_match opts ~patterns ~excludes root in
         Progress.set_message p (fun _ -> "measuring sizes");
-        (* Sizes are printed only with --stats or JSON; measuring walks every match. *)
-        Report.summarize
-          ~measure:(opts.stats || opts.format = Json)
-          ~on_visit:(Progress.show p)
+        Report.summarize ~measure:(measured opts) ~on_visit:(Progress.show p)
           (List.sort (fun (a : Target.t) b -> String.compare a.path b.path) targets))
   in
   let failures =

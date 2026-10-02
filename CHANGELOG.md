@@ -14,4 +14,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The activity indicator repaints from the scan loop instead of a painter thread, so it needs no lock. It does not repaint while a single system call blocks.
 
+- The activity indicator shows elapsed time, and the scan's match count. Removal shows a progress bar over targets, plus bytes when sizes were measured. Scanning has no bar: its only cheap total, the root's top-level entries, stalls on one large subtree. Removal reports each path inside a directory target, so the indicator keeps repainting during a large removal.
+
 - The confirmation prompt is written to stderr and states the item count. Before, a prompt on stdout corrupted JSON output.

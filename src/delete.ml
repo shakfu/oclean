@@ -8,7 +8,8 @@ let guard path f =
 
 let ( let* ) = Result.bind
 
-let rec remove path =
+let rec remove ?(on_visit = ignore) path =
+  on_visit path;
   let* st = guard path (fun () -> Unix.lstat path) in
   match st.st_kind with
   | S_DIR ->
@@ -16,16 +17,16 @@ let rec remove path =
       let* () =
         Array.fold_left
           (fun first name ->
-            let r = remove (Filename.concat path name) in
+            let r = remove ~on_visit (Filename.concat path name) in
             if Result.is_error first then first else r)
           (Ok ()) names
       in
       guard path (fun () -> Unix.rmdir path)
   | _ -> guard path (fun () -> Unix.unlink path)
 
-let remove_all ?(on_remove = ignore) targets =
+let remove_all ?(on_remove = ignore) ?on_visit targets =
   List.filter_map
     (fun (t : Target.t) ->
       on_remove t;
-      match remove t.path with Ok () -> None | Error error -> Some { target = t; error })
+      match remove ?on_visit t.path with Ok () -> None | Error error -> Some { target = t; error })
     targets
