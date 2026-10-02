@@ -42,30 +42,32 @@ let confirm (opts : Options.t) count =
 (* Sizes are known only with --stats or JSON; measuring walks every match. *)
 let measured (opts : Options.t) = opts.stats || opts.format = Json
 
+(* [None] when nothing was attempted. Otherwise the failures and bytes freed. *)
 let remove (inv : Cli.t) (opts : Options.t) (targets : Target.t list) =
   let total = List.length targets in
-  if opts.dry_run || total = 0 || not (confirm opts total) then []
+  if opts.dry_run || total = 0 || not (confirm opts total) then None
   else
     let total_size = List.fold_left (fun n (t : Target.t) -> n + t.size) 0 targets in
-    (* [on_remove] runs before each attempt, so the previous target is done. *)
-    let started = ref 0 and freed = ref 0 and current = ref 0 in
+    let started = ref 0 and freed = ref 0 in
     let message _ =
       if measured opts then
         Printf.sprintf "removing, %s of %s" (Report.format_size !freed) (Report.format_size total_size)
-      else "removing"
+      else Printf.sprintf "removing, %s freed" (Report.format_size !freed)
     in
     Progress.with_progress inv.progress ~message ~summary:(fun _ -> None) (fun p ->
         let on_remove (t : Target.t) =
-          freed := !freed + !current;
-          current := t.size;
           Progress.set_bar p !started total;
           incr started;
           if inv.verbose then Progress.note p ("removing " ^ t.path)
         in
-        let failures = Delete.remove_all ~on_remove ~on_visit:(Progress.show p) targets in
+        let failures =
+          Delete.remove_all ~on_remove ~on_visit:(Progress.show p)
+            ~on_freed:(fun n -> freed := !freed + n)
+            targets
+        in
         if inv.verbose then
           Progress.note p (Printf.sprintf "removed %d item(s)" (total - List.length failures));
-        failures)
+        Some (failures, !freed))
 
 let clean (inv : Cli.t) (opts : Options.t) patterns excludes =
   let dir = Options.root opts in
@@ -91,14 +93,18 @@ let clean (inv : Cli.t) (opts : Options.t) patterns excludes =
   in
   let failures =
     match opts.format with
-    | Text ->
+    | Text -> (
         if not opts.quiet then print_string (Report.render_text ~stats:opts.stats summary);
-        let failures = remove inv opts summary.targets in
-        List.iter (fun (f : Delete.failure) -> prerr_endline ("oclean: " ^ f.error)) failures;
-        failures
+        match remove inv opts summary.targets with
+        | None -> []
+        | Some (failures, freed) ->
+            let count = List.length summary.targets - List.length failures in
+            if not opts.quiet then print_string (Report.render_removed ~count ~freed);
+            List.iter (fun (f : Delete.failure) -> prerr_endline ("oclean: " ^ f.error)) failures;
+            failures)
     | Json ->
-        let failures = remove inv opts summary.targets in
-        print_endline (Report.render_json ~dry_run:opts.dry_run ~failures summary);
+        let failures, freed = Option.value ~default:([], 0) (remove inv opts summary.targets) in
+        print_endline (Report.render_json ~dry_run:opts.dry_run ~failures ~freed summary);
         failures
   in
   if failures <> [] then exit 1

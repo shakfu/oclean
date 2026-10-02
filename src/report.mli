@@ -12,8 +12,12 @@ val summarize : ?measure:bool -> ?on_visit:(string -> unit) -> Target.t list -> 
 val render_text : stats:bool -> t -> string
 (** One [Matched: PATH] line per target; [stats] appends the breakdown. *)
 
-val render_json : dry_run:bool -> ?failures:Delete.failure list -> t -> string
-(** One JSON object with [matches], [summary], [stats] and [failures]. *)
+val render_json : dry_run:bool -> ?failures:Delete.failure list -> ?freed:int -> t -> string
+(** One JSON object with [matches], [summary], [stats] and [failures]. [freed]
+    is the bytes actually removed. *)
+
+val render_removed : count:int -> freed:int -> string
+(** The line printed after removal, e.g. [Removed 3 item(s), 5.00 KB.] *)
 
 val format_size : int -> string
-(** Bytes in binary units, e.g. [4.88 KiB]. *)
+(** Bytes in decimal units, as Finder shows them, e.g. [4.88 MB]. *)

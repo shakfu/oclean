@@ -17,6 +17,12 @@ let tests =
               check_strings "parent first, then children"
                 [ root / "d"; root / "d/a"; root / "d/e"; root / "d/e/b" ]
                 (List.sort String.compare !visited)));
+      it "counts the bytes it frees" (fun () ->
+          with_tree [ ("d/a", "123"); ("d/e/b", "12345"); ("f", "1") ] (fun root ->
+              let freed = ref 0 in
+              ignore
+                (Delete.remove_all ~on_freed:(fun n -> freed := !freed + n) [ target (root / "d"); target (root / "f") ]);
+              check_int "file bytes only" 9 !freed));
       it "removes a symlink, not what it points to" (fun () ->
           with_tree [ ("real/keep", "1") ] (fun root ->
               Unix.symlink (root / "real") (root / "link");
@@ -26,14 +32,17 @@ let tests =
           if not (as_root ()) then
             with_tree [ ("ro/__pycache__/x.pyc", "1"); ("rw/__pycache__/y.pyc", "2") ] (fun root ->
                 Unix.chmod (root / "ro") 0o555;
+                let freed = ref 0 in
                 let failures =
                   Fun.protect
                     ~finally:(fun () -> Unix.chmod (root / "ro") 0o755)
                     (fun () ->
-                      Delete.remove_all [ target (root / "ro/__pycache__"); target (root / "rw/__pycache__") ])
+                      Delete.remove_all ~on_freed:(fun n -> freed := !freed + n)
+                        [ target (root / "ro/__pycache__"); target (root / "rw/__pycache__") ])
                 in
                 check_strings "one failure" [ root / "ro/__pycache__" ]
                   (List.map (fun (f : Delete.failure) -> f.target.path) failures);
+                check_int "only removed bytes counted" 2 !freed;
                 check_bool "names the cause"
                   (List.for_all (fun (f : Delete.failure) -> contains ~sub:"Permission denied" f.error) failures);
                 check_bool "later target removed" (not (Sys.file_exists (root / "rw/__pycache__")))));

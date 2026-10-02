@@ -47,6 +47,11 @@ let tests =
                   check_string "quiet" "" r.out;
                   check_bool "removed" (not (Sys.file_exists (root / "p/b.pyc")));
                   check_bool "kept" (Sys.file_exists (root / "p/keep.py")))));
+      it "reports what removal freed" (fun () ->
+          with_tree tree (fun root ->
+              with_run ~cwd:root [ "-p"; "p"; "-y" ] (fun r ->
+                  check_int "exit" 0 r.code;
+                  check_bool "summary line" (contains ~sub:"Removed 2 item(s), 3 B.\n" r.out))));
       it "reports failed removals and keeps going" (fun () ->
           if not (as_root ()) then
             with_tree [ ("t/ro/__pycache__/x.pyc", "1"); ("t/rw/__pycache__/y.pyc", "2") ] (fun root ->

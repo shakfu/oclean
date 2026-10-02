@@ -25,9 +25,9 @@ let summarize ?(measure = true) ?on_visit targets =
   }
 
 let format_size n =
-  let units = [ ("TiB", 40); ("GiB", 30); ("MiB", 20); ("KiB", 10) ] in
-  match List.find_opt (fun (_, shift) -> n >= 1 lsl shift) units with
-  | Some (unit, shift) -> Printf.sprintf "%.2f %s" (float_of_int n /. float_of_int (1 lsl shift)) unit
+  let units = [ ("TB", 1_000_000_000_000); ("GB", 1_000_000_000); ("MB", 1_000_000); ("KB", 1_000) ] in
+  match List.find_opt (fun (_, scale) -> n >= scale) units with
+  | Some (unit, scale) -> Printf.sprintf "%.2f %s" (float_of_int n /. float_of_int scale) unit
   | None -> Printf.sprintf "%d B" n
 
 let render_text ~stats s =
@@ -89,7 +89,7 @@ and sequence : 'a. Buffer.t -> char -> char -> ('a -> unit) -> 'a list -> unit =
     xs;
   Buffer.add_char b closing
 
-let render_json ~dry_run ?(failures = []) s =
+let render_json ~dry_run ?(failures = []) ?(freed = 0) s =
   let match_ (t : Target.t) =
     Object
       [ ("path", String t.path); ("size", Int t.size); ("pattern", String (Target.label t.reason)) ]
@@ -116,6 +116,8 @@ let render_json ~dry_run ?(failures = []) s =
               ("total_count", Int (List.length s.targets));
               ("total_size", Int s.total_size);
               ("total_size_human", String (format_size s.total_size));
+              ("freed_size", Int freed);
+              ("freed_size_human", String (format_size freed));
               ("dry_run", Bool dry_run);
             ] );
         ("stats", List (List.map stat s.stats));
@@ -125,3 +127,5 @@ let render_json ~dry_run ?(failures = []) s =
   let b = Buffer.create 4096 in
   write b doc;
   Buffer.contents b
+
+let render_removed ~count ~freed = Printf.sprintf "Removed %d item(s), %s.\n" count (format_size freed)

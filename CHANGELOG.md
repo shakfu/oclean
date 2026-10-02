@@ -16,4 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The activity indicator shows elapsed time, and the scan's match count. Removal shows a progress bar over targets, plus bytes when sizes were measured. Scanning has no bar: its only cheap total, the root's top-level entries, stalls on one large subtree. Removal reports each path inside a directory target, so the indicator keeps repainting during a large removal.
 
+- After removal, oclean reports the bytes freed: a `Removed N item(s), SIZE.` line in text output, and `freed_size` in the JSON `summary`. Bytes are summed as files are unlinked, so they are exact, exclude failed removals, and need no `--stats` walk.
+
+- Sizes are shown in decimal units (KB, MB, GB, TB; 1 KB = 1000 bytes) instead of binary units (KiB, MiB), so they match Finder. This changes `--stats` output and the JSON `*_size_human` fields.
+
 - The confirmation prompt is written to stderr and states the item count. Before, a prompt on stdout corrupted JSON output.

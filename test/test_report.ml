@@ -23,15 +23,15 @@ let has out sub = check_bool sub (contains ~sub out)
 let tests =
   group "Report"
     [
-      it "formats byte counts with binary units" (fun () ->
+      it "formats byte counts with decimal units" (fun () ->
           check_string "zero" "0 B" (Report.format_size 0);
           check_string "bytes" "100 B" (Report.format_size 100);
-          check_string "exact KiB" "1.00 KiB" (Report.format_size 1024);
-          check_string "fractional KiB" "4.88 KiB" (Report.format_size 5000);
-          check_string "rounded KiB" "4.98 KiB" (Report.format_size 5100);
-          check_string "MiB" "1.00 MiB" (Report.format_size 1048576);
-          check_string "GiB" "2.50 GiB" (Report.format_size 2684354560);
-          check_string "TiB" "1.00 TiB" (Report.format_size 1099511627776));
+          check_string "exact KB" "1.00 KB" (Report.format_size 1000);
+          check_string "fractional KB" "1.02 KB" (Report.format_size 1024);
+          check_string "rounded KB" "4.88 KB" (Report.format_size 4876);
+          check_string "MB" "1.05 MB" (Report.format_size 1048576);
+          check_string "GB" "2.50 GB" (Report.format_size 2_500_000_000);
+          check_string "TB" "1.10 TB" (Report.format_size 1099511627776));
       it "lists matches as text" (fun () ->
           check_string "listing"
             "Matched: /tmp/p/.DS_Store\n\
@@ -44,7 +44,7 @@ let tests =
              Matched: /tmp/p/__pycache__\n\
              Matched: /tmp/p/other/__pycache__\n\
             \  **/.DS_Store: 1 item(s), 0 B\n\
-            \  **/__pycache__: 2 item(s), 5.86 KiB\n"
+            \  **/__pycache__: 2 item(s), 6.00 KB\n"
             (Report.render_text ~stats:true summary));
       it "renders an empty report" (fun () ->
           check_string "nothing" ""
@@ -57,11 +57,17 @@ let tests =
               "\"size\":5000";
               "\"total_count\":3";
               "\"total_size\":6000";
-              "\"total_size_human\":\"5.86 KiB\"";
+              "\"total_size_human\":\"6.00 KB\"";
               "\"dry_run\":true";
               "\"count\":2";
               "\"failures\":[]";
             ]);
+      it "reports the bytes freed" (fun () ->
+          let out = Report.render_json ~dry_run:false ~freed:5000 summary in
+          has out "\"freed_size\":5000";
+          has out "\"freed_size_human\":\"5.00 KB\"";
+          has (Report.render_json ~dry_run:true summary) "\"freed_size\":0";
+          check_string "text line" "Removed 3 item(s), 5.00 KB.\n" (Report.render_removed ~count:3 ~freed:5000));
       it "reports dry_run as false when deleting" (fun () ->
           has (Report.render_json ~dry_run:false summary) "\"dry_run\":false");
       it "reports removal failures" (fun () ->
