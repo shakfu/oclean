@@ -28,6 +28,14 @@ let tests =
               Unix.symlink (root / "real") (root / "link");
               check_bool "removed" (Delete.remove (root / "link") = Ok ());
               check_bool "target intact" (Sys.file_exists (root / "real/keep"))));
+      it "removes read-only directories inside a target" (fun () ->
+          with_tree [ ("d/a", "1"); ("d/ro/b", "22"); ("d/ro/sub/c", "333") ] (fun root ->
+              List.iter (fun d -> Unix.chmod (root / d) 0o555) [ "d/ro/sub"; "d/ro"; "d" ];
+              let freed = ref 0 in
+              check_bool "no failures"
+                (Delete.remove_all ~on_freed:(fun n -> freed := !freed + n) [ target (root / "d") ] = []);
+              check_bool "gone" (not (Sys.file_exists (root / "d")));
+              check_int "bytes" 6 !freed));
       it "continues past a failed removal" (fun () ->
           if not (as_root ()) then
             with_tree [ ("ro/__pycache__/x.pyc", "1"); ("rw/__pycache__/y.pyc", "2") ] (fun root ->

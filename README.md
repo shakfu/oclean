@@ -2,7 +2,7 @@ oclean
 
 Dependency-free OCaml command-line utility for recursively cleaning development detritus.
 
-A port of [hclean](https://github.com/shakfu/hclean), itself a port of [rclean](https://github.com/rclean). It keeps the safe defaults: protected directories, dry runs, confirmation before deletion, symlink guards, age filtering, build-artifact detection, configuration discovery, statistics and JSON output. It uses only the OCaml standard library and `unix`, both of which ship with the compiler (tested with 4.14.1).
+A port of [hclean](https://github.com/shakfu/hclean) 0.1.0, itself a port of rclean 0.4 (now [reclean](https://github.com/shakfu/reclean)). It keeps the safe defaults: protected directories, dry runs, confirmation before deletion, symlink guards, age filtering, build-artifact detection, configuration discovery, statistics and JSON output. It uses only the OCaml standard library and `unix`, both of which ship with the compiler (tested with 4.14.1).
 
 ## Building
 
@@ -29,6 +29,8 @@ Matches are printed on stdout. The confirmation prompt (`Delete N item(s)? [y/N]
 After removal, a `Removed N item(s), SIZE.` line reports the bytes actually freed; `-q` suppresses it. In JSON these are `freed_size` and `freed_size_human` in `summary`. Sizes are apparent sizes (`st_size`), as with `--stats`, not disk blocks. Units are decimal (1 MB = 1,000,000 bytes), as in Finder.
 
 While scanning or removing, oclean shows an activity indicator on stderr: a spinner, counts, elapsed time and the current path. Removal adds a progress bar. It appears only when stderr is a terminal and the work has run for 0.25 s, and is erased before results are printed. `--progress` forces reporting off a terminal, as one `scanned N entries` line at the end; `--no-progress` disables it.
+
+On a terminal, directory matches are bold blue, sizes bold, the removal line green, the prompt yellow and the `oclean:` error prefix red. `--color` takes `auto`, `always` or `never`. Under `auto`, the default, a stream is coloured only when it is a terminal, `TERM` is not `dumb`, and `NO_COLOR` is unset or empty. `always` overrides all three, for `oclean -d --color=always | less -R`. JSON is never coloured.
 
 - Scanning shows entries visited and matches found. It has no bar, since the total is unknown until the walk ends.
 
@@ -91,6 +93,7 @@ src/target.ml    Target.t, a match and its reason
 src/preset.ml    named pattern sets, protected directories
 src/scan.ml      directory walk, build-artifact detection, sizes
 src/delete.ml    removal, collecting failures
+src/style.ml     ANSI colour and when to use it
 src/report.ml    summaries, text and JSON rendering
 src/config.ml    .oclean.toml reading, discovery and writing
 bin/progress.ml  the stderr activity indicator
@@ -103,7 +106,7 @@ The modules under `src/` never read argv, prompt or exit. Each has an `.mli` wit
 
 ## Differences from hclean
 
-oclean fixes these hclean defects. Each fix has a regression test.
+oclean fixed these hclean 0.1.0 defects. Each fix has a regression test. hclean's unreleased branch has since backported them all.
 
 - `-c` without a path searches ancestors of the working directory. hclean never left `.`.
 
@@ -126,6 +129,14 @@ oclean fixes these hclean defects. Each fix has a regression test.
 - Directory sizes are measured only for `--stats` and JSON output.
 
 - Non-UTF-8 file names print without crashing.
+
+Remaining differences from current hclean:
+
+- Sizes use decimal units (KB). hclean uses binary units (KiB).
+
+- A relative `path` in a config file resolves against the working directory. hclean resolves it against the file's directory.
+
+- Bytes freed are summed as files are unlinked. hclean measures each target before removal and subtracts what a failure left.
 
 ## Known limitations
 

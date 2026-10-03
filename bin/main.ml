@@ -1,7 +1,16 @@
 (* The oclean executable: configuration, prompting and exit codes. *)
 
+let colored mode fd =
+  Style.enabled ~mode ~no_color:(Sys.getenv_opt "NO_COLOR") ~term:(Sys.getenv_opt "TERM")
+    ~tty:(Unix.isatty fd)
+
+(* Set before argv is parsed, so a parse error can be coloured too. *)
+let err_color = ref (colored Auto Unix.stderr)
+
+let error_line msg = Style.red ~color:!err_color "oclean:" ^ " " ^ msg
+
 let die msg =
-  prerr_endline ("oclean: " ^ msg);
+  prerr_endline (error_line msg);
   exit 1
 
 let ok_or_die = function Ok x -> x | Error e -> die e
@@ -34,7 +43,7 @@ let confirm (opts : Options.t) count =
   opts.assume_yes
   ||
   (flush stdout;
-   Printf.eprintf "Delete %d item(s)? [y/N] %!" count;
+   Printf.eprintf "%s %!" (Style.yellow ~color:!err_color (Printf.sprintf "Delete %d item(s)? [y/N]" count));
    match In_channel.input_line stdin with
    | Some answer -> List.mem (String.lowercase_ascii (String.trim answer)) [ "y"; "yes" ]
    | None -> false)
@@ -69,10 +78,14 @@ let remove (inv : Cli.t) (opts : Options.t) (targets : Target.t list) =
           Progress.note p (Printf.sprintf "removed %d item(s)" (total - List.length failures));
         Some (failures, !freed))
 
-let clean (inv : Cli.t) (opts : Options.t) patterns excludes =
+let root_or_die opts =
   let dir = Options.root opts in
   if not (Sys.file_exists dir && Sys.is_directory dir) then die ("invalid path: " ^ dir);
-  let root = Util.absolute dir in
+  dir
+
+let clean (inv : Cli.t) (opts : Options.t) patterns excludes =
+  let root = Util.absolute (root_or_die opts) in
+  let color = colored inv.color Unix.stdout in
   let matches = ref 0 in
   let summary =
     Progress.with_progress inv.progress
@@ -94,13 +107,13 @@ let clean (inv : Cli.t) (opts : Options.t) patterns excludes =
   let failures =
     match opts.format with
     | Text -> (
-        if not opts.quiet then print_string (Report.render_text ~stats:opts.stats summary);
+        if not opts.quiet then print_string (Report.render_text ~color ~stats:opts.stats summary);
         match remove inv opts summary.targets with
         | None -> []
         | Some (failures, freed) ->
             let count = List.length summary.targets - List.length failures in
-            if not opts.quiet then print_string (Report.render_removed ~count ~freed);
-            List.iter (fun (f : Delete.failure) -> prerr_endline ("oclean: " ^ f.error)) failures;
+            if not opts.quiet then print_string (Report.render_removed ~color ~count ~freed ());
+            List.iter (fun (f : Delete.failure) -> prerr_endline (error_line f.error)) failures;
             failures)
     | Json ->
         let failures, freed = Option.value ~default:([], 0) (remove inv opts summary.targets) in
@@ -115,12 +128,14 @@ let main () =
   | Ok { command = Show_help; _ } -> print_string Cli.help
   | Ok { command = Show_version; _ } -> print_endline Cli.version
   | Ok inv -> (
+      err_color := colored inv.color Unix.stderr;
       let opts = ok_or_die (Config.resolve inv.config inv.options) in
       let patterns, excludes = ok_or_die (validate opts) in
       match inv.command with
       | Write_config ->
-          if not (Config.write_default Config.file_name) then
-            die (Printf.sprintf "cannot overwrite existing '%s' file" Config.file_name)
+          let file = Filename.concat (root_or_die opts) Config.file_name in
+          if not (Config.write_default file) then
+            die (Printf.sprintf "cannot overwrite existing '%s' file" file)
       | List_patterns -> List.iter (fun g -> print_endline (Glob.source g)) patterns
       | Clean | Show_help | Show_version -> clean inv opts patterns excludes)
 

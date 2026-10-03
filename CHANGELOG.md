@@ -31,3 +31,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Bare `-c` stops its upward search below the home directory, so a `.oclean.toml` in `~` or above it is never read. Such a file would apply to every run under `~`, which is the global file's role.
 
 - The confirmation prompt is written to stderr and states the item count. Before, a prompt on stdout corrupted JSON output.
+
+- Terminal output is coloured: directory matches, sizes, the removal line, the prompt and the error prefix. `--color=auto|always|never` selects when. `auto`, the default, colours a terminal unless `NO_COLOR` is non-empty or `TERM=dumb`. `always` overrides `NO_COLOR`, since [no-color.org](https://no-color.org) asks that an explicit option win. Colour marks directories because they are the matches that can hold gigabytes.
+
+### Fixed
+
+- A target containing a read-only directory failed with `Permission denied`, since unlinking needs write permission on the parent. Each directory inside a target that the user owns now gains owner rwx first, as hclean's `removePathForcibly` does. The change goes through a descriptor checked against the `lstat` result, so a directory swapped for a symlink is refused. The target's parent is never changed.
+
+- `-w` wrote `.oclean.toml` into the working directory and ignored `--path`. It now writes into `--path`, and fails with `invalid path` when that is not a directory, matching hclean.

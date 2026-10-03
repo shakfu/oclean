@@ -30,13 +30,18 @@ let format_size n =
   | Some (unit, scale) -> Printf.sprintf "%.2f %s" (float_of_int n /. float_of_int scale) unit
   | None -> Printf.sprintf "%d B" n
 
-let render_text ~stats s =
+let render_text ?(color = false) ~stats s =
   let b = Buffer.create 1024 in
-  List.iter (fun (t : Target.t) -> Printf.bprintf b "Matched: %s\n" t.path) s.targets;
+  List.iter
+    (fun (t : Target.t) ->
+      let path = if t.is_dir then Style.blue ~color t.path else t.path in
+      Printf.bprintf b "%s %s\n" (Style.dim ~color "Matched:") path)
+    s.targets;
   if stats then
     List.iter
       (fun st ->
-        Printf.bprintf b "  %s: %d item(s), %s\n" st.pattern st.count (format_size st.size))
+        Printf.bprintf b "  %s: %d item(s), %s\n" st.pattern st.count
+          (Style.bold ~color (format_size st.size)))
       s.stats;
   Buffer.contents b
 
@@ -128,4 +133,5 @@ let render_json ~dry_run ?(failures = []) ?(freed = 0) s =
   write b doc;
   Buffer.contents b
 
-let render_removed ~count ~freed = Printf.sprintf "Removed %d item(s), %s.\n" count (format_size freed)
+let render_removed ?(color = false) ~count ~freed () =
+  Style.green ~color (Printf.sprintf "Removed %d item(s), %s." count (format_size freed)) ^ "\n"

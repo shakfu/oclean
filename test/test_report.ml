@@ -46,6 +46,24 @@ let tests =
             \  **/.DS_Store: 1 item(s), 0 B\n\
             \  **/__pycache__: 2 item(s), 6.00 KB\n"
             (Report.render_text ~stats:true summary));
+      it "colours directories, sizes and the removal line" (fun () ->
+          let out = Report.render_text ~color:true ~stats:true summary in
+          has out "\027[2mMatched:\027[0m /tmp/p/.DS_Store\n";
+          has out "\027[2mMatched:\027[0m \027[1;34m/tmp/p/__pycache__\027[0m\n";
+          has out "2 item(s), \027[1m6.00 KB\027[0m\n";
+          check_string "removed" "\027[32mRemoved 1 item(s), 0 B.\027[0m\n"
+            (Report.render_removed ~color:true ~count:1 ~freed:0 ()));
+      it "decides when to colour" (fun () ->
+          let on ?(mode = Style.Auto) ?no_color ?(term = "xterm") ?(tty = true) () =
+            Style.enabled ~mode ~no_color ~term:(Some term) ~tty
+          in
+          check_bool "terminal" (on ());
+          check_bool "empty NO_COLOR" (on ~no_color:"" ());
+          check_bool "NO_COLOR" (not (on ~no_color:"1" ()));
+          check_bool "dumb terminal" (not (on ~term:"dumb" ()));
+          check_bool "not a terminal" (not (on ~tty:false ()));
+          check_bool "never" (not (on ~mode:Never ()));
+          check_bool "always overrides" (on ~mode:Always ~no_color:"1" ~term:"dumb" ~tty:false ()));
       it "renders an empty report" (fun () ->
           check_string "nothing" ""
             (Report.render_text ~stats:true { targets = []; total_size = 0; stats = [] }));
@@ -67,7 +85,7 @@ let tests =
           has out "\"freed_size\":5000";
           has out "\"freed_size_human\":\"5.00 KB\"";
           has (Report.render_json ~dry_run:true summary) "\"freed_size\":0";
-          check_string "text line" "Removed 3 item(s), 5.00 KB.\n" (Report.render_removed ~count:3 ~freed:5000));
+          check_string "text line" "Removed 3 item(s), 5.00 KB.\n" (Report.render_removed ~count:3 ~freed:5000 ()));
       it "reports dry_run as false when deleting" (fun () ->
           has (Report.render_json ~dry_run:false summary) "\"dry_run\":false");
       it "reports removal failures" (fun () ->

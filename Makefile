@@ -6,7 +6,7 @@ LIBS     := unix.cmxa
 
 # Modules in dependency order.
 LIB   := src/util.ml src/glob.ml src/options.ml src/target.ml src/preset.ml \
-         src/scan.ml src/delete.ml src/report.ml src/config.ml
+         src/scan.ml src/delete.ml src/style.ml src/report.ml src/config.ml
 APP   := bin/progress.ml bin/cli.ml
 TESTS := test/harness.ml test/test_util.ml test/test_glob.ml test/test_preset.ml \
          test/test_scan.ml test/test_report.ml test/test_config.ml test/test_delete.ml \

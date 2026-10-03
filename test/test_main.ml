@@ -68,6 +68,18 @@ let tests =
           with_tree [ (".oclean.toml", "patterns = [\"**/*.marker\"]\n"); ("n/d/x.marker", "") ] (fun root ->
               with_run ~cwd:(root / "n/d") [ "-c"; "-d" ] (fun r ->
                   check_string "found" (Printf.sprintf "Matched: %s\n" (root / "n/d/x.marker")) r.out)));
+      it "writes the starter config into --path" (fun () ->
+          with_tree [ ("d/", "") ] (fun root ->
+              with_run ~cwd:root [ "-w"; "-p"; "d" ] (fun r ->
+                  check_int "exit" 0 r.code;
+                  check_bool "in --path" (Sys.file_exists (root / "d/.oclean.toml"));
+                  check_bool "not in cwd" (not (Sys.file_exists (root / ".oclean.toml"))));
+              with_run ~cwd:root [ "-w"; "-p"; "d" ] (fun r ->
+                  check_int "exit" 1 r.code;
+                  check_string "refused" "oclean: cannot overwrite existing 'd/.oclean.toml' file\n" r.err);
+              with_run ~cwd:root [ "-w"; "-p"; "missing" ] (fun r ->
+                  check_int "exit" 1 r.code;
+                  check_string "message" "oclean: invalid path: missing\n" r.err)));
       it "lists the patterns a run would use" (fun () ->
           with_tree [] (fun root ->
               with_run ~cwd:root [ "-g"; "**/*.log"; "--preset"; "rust"; "-l" ] (fun r ->

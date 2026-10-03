@@ -8,6 +8,7 @@ type t = {
   config : Config.source;
   verbose : bool;  (** Log what is scanned and removed, on stderr. *)
   progress : Progress.mode;
+  color : Style.mode;
 }
 
 let default =
@@ -17,6 +18,7 @@ let default =
     config = No_config;
     verbose = false;
     progress = Auto;
+    color = Style.Auto;
   }
 
 let version = "oclean 0.1.0"
@@ -30,6 +32,7 @@ let parse args =
       | "text" -> set (fun o -> { o with Options.format = Text }) rest
       | _ -> Error ("unknown output format: " ^ v)
     in
+    let color v rest = Result.bind (Style.parse_mode v) (fun c -> go { t with color = c } rest) in
     match args with
     | [] -> Ok t
     | ("-h" | "--help") :: rest -> go { t with command = Show_help } rest
@@ -56,12 +59,15 @@ let parse args =
         Result.bind (Util.parse_duration v) (fun secs ->
             set (fun o -> { o with older_than = Some secs }) rest)
     | "--format" :: v :: rest -> format v rest
+    | "--color" :: v :: rest -> color v rest
     (* -c takes an optional path; a following flag means "discover". *)
     | ("-c" | "--configfile") :: v :: rest when not (String.starts_with ~prefix:"-" v) ->
         go { t with config = File v } rest
     | ("-c" | "--configfile") :: rest -> go { t with config = Discover } rest
     | arg :: rest when String.starts_with ~prefix:"--format=" arg ->
         format (String.sub arg 9 (String.length arg - 9)) rest
+    | arg :: rest when String.starts_with ~prefix:"--color=" arg ->
+        color (String.sub arg 8 (String.length arg - 8)) rest
     | arg :: _ -> Error ("unknown or incomplete option: " ^ arg)
   in
   go default args
@@ -90,6 +96,7 @@ let help =
       "  -v, --verbose                 Log scanning and removal on stderr";
       "  -P, --progress                Always report progress, terminal or not";
       "      --no-progress             Never show the activity indicator";
+      "      --color WHEN              auto (default), always, or never";
       "  -l, --list                    List patterns";
       "  -w, --write-configfile        Write " ^ Config.file_name;
       "  -h, --help                    Show this help";

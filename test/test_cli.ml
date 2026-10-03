@@ -56,7 +56,11 @@ let tests =
           check_bool "long progress" ((parse [ "--progress" ]).progress = Always);
           check_bool "no progress" ((parse [ "--no-progress" ]).progress = Never);
           check_bool "automatic by default" ((parse []).progress = Auto);
-          check_bool "off by default" (not (parse []).verbose));
+          check_bool "off by default" (not (parse []).verbose);
+          check_bool "auto colour by default" ((parse []).color = Auto);
+          check_bool "always" ((parse [ "--color"; "always" ]).color = Always);
+          check_bool "never" ((parse [ "--color=never" ]).color = Never);
+          check_bool "bad mode" (Result.is_error (Cli.parse [ "--color=sometimes" ])));
       it "recognises the non-cleaning commands" (fun () ->
           check_bool "help" ((parse [ "--help" ]).command = Show_help);
           check_bool "short help" ((parse [ "-h" ]).command = Show_help);
@@ -76,5 +80,5 @@ let tests =
           List.iter
             (fun flag -> check_bool (flag ^ " is undocumented") (List.mem flag words))
             [ "-p"; "-g"; "-e"; "--preset"; "-d"; "-y"; "-s"; "-o"; "-B"; "-i"; "-r"; "-c"; "--format";
-              "--no-protect"; "-q"; "-v"; "-P"; "--no-progress"; "-l"; "-w"; "-h"; "--version" ]);
+              "--no-protect"; "-q"; "-v"; "-P"; "--no-progress"; "--color"; "-l"; "-w"; "-h"; "--version" ]);
     ]

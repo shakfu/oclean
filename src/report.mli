@@ -9,14 +9,15 @@ val summarize : ?measure:bool -> ?on_visit:(string -> unit) -> Target.t list -> 
     With [measure] (the default) directory targets are walked for their size,
     reporting each entry to [on_visit]. *)
 
-val render_text : stats:bool -> t -> string
-(** One [Matched: PATH] line per target; [stats] appends the breakdown. *)
+val render_text : ?color:bool -> stats:bool -> t -> string
+(** One [Matched: PATH] line per target; [stats] appends the breakdown.
+    [color] highlights directories and sizes. *)
 
 val render_json : dry_run:bool -> ?failures:Delete.failure list -> ?freed:int -> t -> string
 (** One JSON object with [matches], [summary], [stats] and [failures]. [freed]
     is the bytes actually removed. *)
 
-val render_removed : count:int -> freed:int -> string
+val render_removed : ?color:bool -> count:int -> freed:int -> unit -> string
 (** The line printed after removal, e.g. [Removed 3 item(s), 5.00 KB.] *)
 
 val format_size : int -> string
