@@ -52,11 +52,11 @@ Patterns are matched against paths relative to the scan root.
 
 ## Build artifacts
 
-`-B` matches build output directories (`build`, `dist`, `target`, `.next`, `_build`, `zig-out` and others). A directory matches only when the project marker that produces it (`Cargo.toml`, `package.json`, `mix.exs`, ...) sits beside it, and a `.git` exists in that directory or an ancestor. The ancestor rule covers workspace members such as `crates/foo/target`.
+`-B` matches build output directories (`build`, `dist`, `target`, `.next`, `_build`, `zig-out` and others). A directory matches only when the project marker that produces it (`Cargo.toml`, `package.json`, `mix.exs`, ...) sits beside it, and a `.git` exists in that directory or an ancestor below the home directory. The ancestor rule covers workspace members such as `crates/foo/target`; the home boundary keeps a dotfiles repository in `~` from qualifying every project under it.
 
 ## Configuration
 
-`oclean -c` reads `.oclean.toml` from the working directory or its nearest ancestor, falling back to `~/.config/oclean/config.toml`. `oclean -c FILE` reads that file. Without `-c`, no configuration is read.
+`oclean -c` reads `.oclean.toml` from the working directory or its nearest ancestor, falling back to the global `oclean/config.toml` under `$XDG_CONFIG_HOME`, or under `~/.config` when that is unset or relative. The search stops below the home directory, so a `.oclean.toml` in `~` or above it is never read; user-wide settings belong in the global file. `oclean -c FILE` reads that file. Without `-c`, no configuration is read. Only one file is read per run, and files are not merged.
 
 ```toml
 path = "."

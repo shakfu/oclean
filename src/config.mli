@@ -28,8 +28,10 @@ val apply : string -> Options.t -> (Options.t, string) result
 (** Merge the named file into the options. *)
 
 val discover : string -> string option
-(** [file_name] in the directory or its nearest ancestor, else
-    [~/.config/oclean/config.toml] if it exists. *)
+(** [file_name] in the directory or its nearest ancestor below the home
+    directory, else [oclean/config.toml] under [$XDG_CONFIG_HOME] (when
+    absolute) or [~/.config], if it exists. A file in [~] or above it is never
+    found. *)
 
 val resolve : source -> Options.t -> (Options.t, string) result
 

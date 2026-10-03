@@ -21,6 +21,17 @@ let absolute path =
   |> String.concat "/"
   |> ( ^ ) "/"
 
+let ancestors_below_home start =
+  let realpath p = try Some (Unix.realpath p) with Unix.Unix_error _ -> None in
+  let home = Option.bind (Sys.getenv_opt "HOME") realpath in
+  let rec climb dir =
+    if home <> None && realpath dir = home then []
+    else
+      let parent = Filename.dirname dir in
+      if parent = dir then [ dir ] else dir :: climb parent
+  in
+  climb (absolute start)
+
 let is_file path = Sys.file_exists path && not (Sys.is_directory path)
 
 let dedup xs =

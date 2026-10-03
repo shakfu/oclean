@@ -13,6 +13,9 @@ let tests =
             (Option.fold ~none:false ~some:(List.mem "**/__pycache__") (Preset.lookup "python"));
           check_lookup "rust" (Some [ "**/target" ]) (Preset.lookup "rust");
           check_lookup "unknown" None (Preset.lookup "nope"));
+      it "keeps shell and REPL history out of every preset" (fun () ->
+          check_strings "history patterns" []
+            (List.filter (fun p -> contains ~sub:"history" p) (Preset.expand [ "all" ])));
       it "ignores preset name case" (fun () ->
           check_lookup "upper" (Preset.lookup "node") (Preset.lookup "NODE");
           check_lookup "mixed" (Preset.lookup "python") (Preset.lookup "Python"));

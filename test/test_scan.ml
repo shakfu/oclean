@@ -100,6 +100,21 @@ let tests =
           with_tree [ ("proj/.git/HEAD", "ref"); ("proj/target/x.o", "x") ] (fun root ->
               check_matches "no Cargo.toml, no match" []
                 (matches { defaults with artifacts = true } root [ "**/nothing" ])));
+      it "ignores a .git in or above the home directory" (fun () ->
+          with_tree
+            [ ("home/.git/HEAD", "ref"); ("home/proj/CMakeLists.txt", ""); ("home/proj/build/x.o", "") ]
+            (fun root ->
+              with_home (root / "home") (fun () ->
+                  check_matches "dotfiles repository does not count" []
+                    (matches { defaults with artifacts = true } root [ "**/nothing" ]))));
+      it "finds a .git between the artifact and the home directory" (fun () ->
+          with_tree
+            [ ("home/.git/HEAD", "ref"); ("home/ws/.git/HEAD", "ref"); ("home/ws/Cargo.toml", "");
+              ("home/ws/crates/foo/Cargo.toml", ""); ("home/ws/crates/foo/target/y", "") ]
+            (fun root ->
+              with_home (root / "home") (fun () ->
+                  check_matches "workspace member" [ ("home/ws/crates/foo/target", "build-artifact") ]
+                    (matches { defaults with artifacts = true } root [ "**/nothing" ]))));
       it "finds build artifacts of workspace members" (fun () ->
           with_tree
             [ ("ws/.git/HEAD", "ref"); ("ws/Cargo.toml", ""); ("ws/target/x", "");

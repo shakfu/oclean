@@ -1,12 +1,11 @@
 let table =
   [
     ( "common",
-      [ "**/.DS_Store"; "**/.bash_history"; "**/.python_history"; "**/Thumbs.db"; "**/*.swp";
-        "**/*.swo" ] );
+      [ "**/.DS_Store"; "**/Thumbs.db"; "**/*.swp"; "**/*.swo" ] );
     ( "python",
       [ "**/__pycache__"; "**/.coverage"; "**/.mypy_cache"; "**/.pylint_cache";
         "**/.pytest_cache"; "**/.ruff_cache"; "**/.rumdl_cache"; "**/.pyscn";
-        "**/.ropeproject"; "**/.python_history"; "**/pip-log.txt"; "**/*.pyc"; "**/*.pyo" ] );
+        "**/.ropeproject"; "**/pip-log.txt"; "**/*.pyc"; "**/*.pyo" ] );
     ( "node",
       [ "**/node_modules"; "**/.next"; "**/.nuxt"; "**/.cache"; "**/dist"; "**/.parcel-cache";
         "**/.turbo"; "**/.eslintcache"; "**/coverage"; "**/.nyc_output" ] );

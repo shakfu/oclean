@@ -18,18 +18,12 @@ let markers =
     ("_build", [ "mix.exs" ]);
   ]
 
-let rec in_git_repo dir =
-  Sys.file_exists (Filename.concat dir ".git")
-  ||
-  let parent = Filename.dirname dir in
-  parent <> dir && in_git_repo parent
-
 let is_build_artifact dir name =
   match List.assoc_opt name markers with
   | None -> false
   | Some files ->
       List.exists (fun f -> Util.is_file (Filename.concat dir f)) files
-      && in_git_repo (Util.absolute dir)
+      && List.exists (fun d -> Sys.file_exists (Filename.concat d ".git")) (Util.ancestors_below_home dir)
 
 let lstat path = try Some (Unix.lstat path) with Unix.Unix_error _ -> None
 

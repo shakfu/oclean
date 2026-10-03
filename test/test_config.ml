@@ -25,6 +25,7 @@ let apply_error file o =
   match Config.apply file o with Ok _ -> fail "expected an error" | Error e -> e
 
 let with_config text f = with_tree [ (".oclean.toml", text) ] (fun root -> f (root / ".oclean.toml"))
+let check_found = check ~show:(Option.fold ~none:"None" ~some:str)
 let check_root = check ~show:(function None -> "None" | Some s -> str s)
 
 let tests =
@@ -89,6 +90,36 @@ let tests =
               check ~show:(Option.fold ~none:"None" ~some:str) "closest"
                 (Some (root / "a/.oclean.toml"))
                 (Config.discover (root / "a/b"))));
+      it "does not discover a file in or above the home directory" (fun () ->
+          with_tree
+            [ (".oclean.toml", "dry_run = true\n"); ("home/.oclean.toml", "dry_run = true\n");
+              ("home/proj/a/", "") ]
+            (fun root ->
+              with_home (root / "home") (fun () ->
+                  check_found "neither file" None (Config.discover (root / "home/proj/a"));
+                  check_found "not from home itself" None (Config.discover (root / "home")))));
+      it "discovers a project file below the home directory" (fun () ->
+          with_tree [ ("home/.oclean.toml", ""); ("home/proj/.oclean.toml", ""); ("home/proj/a/", "") ]
+            (fun root ->
+              with_home (root / "home") (fun () ->
+                  check_found "project file" (Some (root / "home/proj/.oclean.toml"))
+                    (Config.discover (root / "home/proj/a")))));
+      it "searches to the root when started outside the home directory" (fun () ->
+          with_tree [ (".oclean.toml", ""); ("home/", ""); ("work/a/", "") ] (fun root ->
+              with_home (root / "home") (fun () ->
+                  check_found "ancestor" (Some (root / ".oclean.toml")) (Config.discover (root / "work/a")))));
+      it "reads the global file from an absolute XDG_CONFIG_HOME" (fun () ->
+          with_tree
+            [ ("xdg/oclean/config.toml", "dry_run = true\n"); (".config/oclean/config.toml", "");
+              ("work/", "") ]
+            (fun root ->
+              with_home root (fun () ->
+                  with_env "XDG_CONFIG_HOME" (root / "xdg") (fun () ->
+                      check_found "XDG file" (Some (root / "xdg/oclean/config.toml"))
+                        (Config.discover (root / "work")));
+                  with_env "XDG_CONFIG_HOME" "xdg" (fun () ->
+                      check_found "relative value ignored" (Some (root / ".config/oclean/config.toml"))
+                        (Config.discover (root / "work"))))));
       it "discovers from the working directory" (fun () ->
           with_tree [ (".oclean.toml", "dry_run = true\n"); ("a/b/", "") ] (fun root ->
               in_directory (root / "a/b") (fun () ->

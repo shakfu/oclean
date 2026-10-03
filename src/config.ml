@@ -127,21 +127,29 @@ let apply file o =
   let* entries = Result.map_error (fun e -> file ^ ": " ^ e) (parse text) in
   merge file entries o
 
+(* The search stops below the home directory: a file in [~] or above it would
+   apply to every run under [~], which is the global file's role. *)
 let discover start =
-  let rec climb dir =
-    let candidate = Filename.concat dir file_name in
-    if Util.is_file candidate then Some candidate
-    else
-      let parent = Filename.dirname dir in
-      if parent = dir then None else climb parent
+  let local =
+    List.find_map
+      (fun dir ->
+        let candidate = Filename.concat dir file_name in
+        if Util.is_file candidate then Some candidate else None)
+      (Util.ancestors_below_home start)
   in
-  let global home =
-    let p = List.fold_left Filename.concat home [ ".config"; "oclean"; "config.toml" ] in
+  (* The XDG spec ignores a relative XDG_CONFIG_HOME. *)
+  let base =
+    match Sys.getenv_opt "XDG_CONFIG_HOME" with
+    | Some d when not (Filename.is_relative d) -> Some d
+    | _ -> Option.map (fun h -> Filename.concat h ".config") (Sys.getenv_opt "HOME")
+  in
+  let global dir =
+    let p = List.fold_left Filename.concat dir [ "oclean"; "config.toml" ] in
     if Util.is_file p then Some p else None
   in
-  match climb (Util.absolute start) with
+  match local with
   | Some _ as found -> found
-  | None -> Option.bind (Sys.getenv_opt "HOME") global
+  | None -> Option.bind base global
 
 let resolve source o =
   match source with

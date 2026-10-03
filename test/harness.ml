@@ -92,3 +92,12 @@ let globs patterns =
 
 (* Permission checks do not apply to root, so tests relying on them skip. *)
 let as_root () = Unix.geteuid () = 0
+
+(* Run [f] with [name] set to [value], restoring it afterwards. The stdlib has
+   no unsetenv, so an unset variable comes back as empty. *)
+let with_env name value f =
+  let saved = Sys.getenv_opt name in
+  Unix.putenv name value;
+  Fun.protect ~finally:(fun () -> Unix.putenv name (Option.value saved ~default:"")) f
+
+let with_home home f = with_env "HOME" home f

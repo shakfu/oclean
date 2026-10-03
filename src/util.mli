@@ -8,6 +8,12 @@ val absolute : string -> string
 (** Absolute form of a path, with empty and [.] segments removed. [..] is kept,
     since resolving it lexically is wrong across symlinks. *)
 
+val ancestors_below_home : string -> string list
+(** The absolute form of a directory, then its ancestors, nearest first. The
+    list stops below the home directory, leaving out [~] and everything above
+    it, so a file there cannot claim every directory under [~]. A start outside
+    [~] runs to the root. *)
+
 val is_file : string -> bool
 (** Does the path exist and name something other than a directory? *)
 

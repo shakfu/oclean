@@ -20,7 +20,8 @@ val scan :
 
 val is_build_artifact : string -> string -> bool
 (** [is_build_artifact dir name]: is [dir/name] build output? Requires a
-    project marker for [name] in [dir], and a [.git] in [dir] or an ancestor. *)
+    project marker for [name] in [dir], and a [.git] in [dir] or an ancestor
+    below the home directory. *)
 
 val directory_size : ?on_visit:(string -> unit) -> string -> int
 (** Total bytes under a directory, not following symlinks. Unreadable entries
