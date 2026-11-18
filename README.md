@@ -2,7 +2,7 @@ oclean
 
 Dependency-free OCaml command-line utility for recursively cleaning development detritus.
 
-A port of [hclean](https://github.com/shakfu/hclean) 0.1.0, itself a port of rclean 0.4 (now [reclean](https://github.com/shakfu/reclean)). It keeps the safe defaults: protected directories, dry runs, confirmation before deletion, symlink guards, age filtering, build-artifact detection, configuration discovery, statistics and JSON output. It uses only the OCaml standard library and `unix`, both of which ship with the compiler (tested with 4.14.1).
+A port of [hclean](https://github.com/shakfu/hclean) 0.1.0, itself a port of rclean 0.4 (now [reclean](https://github.com/shakfu/reclean)). It keeps the safe defaults: protected directories, dry runs, confirmation before deletion, symlink guards, age filtering, build-artifact detection, configuration discovery, statistics and JSON output. It uses only the OCaml standard library and `unix`, both of which ship with the compiler (tested with 4.14.1), plus a C stub for the `*at` calls `unix` lacks.
 
 ## Building
 
@@ -26,7 +26,7 @@ Run `oclean --help` for the full option list.
 
 Matches are printed on stdout. The confirmation prompt (`Delete N item(s)? [y/N]`) goes to stderr, so stdout carries only the report. With `--format json` the report is printed after removal, and its `failures` array lists every target that could not be removed. A failed removal does not stop the run; oclean removes what it can, then exits 1.
 
-After removal, a `Removed N item(s), SIZE.` line reports the bytes actually freed; `-q` suppresses it. In JSON these are `freed_size` and `freed_size_human` in `summary`. Sizes are apparent sizes (`st_size`), as with `--stats`, not disk blocks. Units are decimal (1 MB = 1,000,000 bytes), as in Finder.
+After removal, a `Removed N item(s), SIZE.` line reports the bytes actually freed; `-q` suppresses it. In JSON these are `freed_size` and `freed_size_human` in `summary`. Sizes are apparent sizes (`st_size`), as with `--stats`, not disk blocks. Units are binary (1 KiB = 1024 bytes).
 
 While scanning or removing, oclean shows an activity indicator on stderr: a spinner, counts, elapsed time and the current path. Removal adds a progress bar. It appears only when stderr is a terminal and the work has run for 0.25 s, and is erased before results are printed. `--progress` forces reporting off a terminal, as one `scanned N entries` line at the end; `--no-progress` disables it.
 
@@ -132,15 +132,11 @@ oclean fixed these hclean 0.1.0 defects. Each fix has a regression test. hclean'
 
 Remaining differences from current hclean:
 
-- Sizes use decimal units (KB). hclean uses binary units (KiB).
-
 - A relative `path` in a config file resolves against the working directory. hclean resolves it against the file's directory.
 
 - Bytes freed are summed as files are unlinked. hclean measures each target before removal and subtracts what a failure left.
 
 ## Known limitations
-
-- JSON output copies file-name bytes as they are. A non-UTF-8 name produces invalid JSON.
 
 - Terminal width comes from `COLUMNS`, and defaults to 80. The stdlib and `unix` do not expose `TIOCGWINSZ`.
 

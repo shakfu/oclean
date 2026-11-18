@@ -19,3 +19,7 @@ val is_file : string -> bool
 
 val dedup : string list -> string list
 (** Drop repeated elements, keeping the first occurrence of each. *)
+
+val escape : string -> string
+(** A file name made safe for a terminal: bytes 0x00-0x1f and 0x7f become
+    [\xNN], a backslash becomes [\\]. Other bytes pass through. *)

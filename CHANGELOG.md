@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - After removal, oclean reports the bytes freed: a `Removed N item(s), SIZE.` line in text output, and `freed_size` in the JSON `summary`. Bytes are summed as files are unlinked, so they are exact, exclude failed removals, and need no `--stats` walk.
 
-- Sizes are shown in decimal units (KB, MB, GB, TB; 1 KB = 1000 bytes) instead of binary units (KiB, MiB), so they match Finder. This changes `--stats` output and the JSON `*_size_human` fields.
+- Sizes use binary units with two decimals (`1.95 KiB`, up to TiB), as core spec `SIZE-4` requires. This settles the "Size units" open decision in hclean's `docs/dev/variants.md` in favour of binary, so oclean and hclean print the same sizes.
 
 - The global config file honours `XDG_CONFIG_HOME`: it is `$XDG_CONFIG_HOME/oclean/config.toml` when that is absolute, else `~/.config/oclean/config.toml`.
 
@@ -36,6 +36,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- A target containing a read-only directory failed with `Permission denied`, since unlinking needs write permission on the parent. Each directory inside a target that the user owns now gains owner rwx first, as hclean's `removePathForcibly` does. The change goes through a descriptor checked against the `lstat` result, so a directory swapped for a symlink is refused. The target's parent is never changed.
+- A target containing a read-only directory failed with `Permission denied`, since unlinking needs write permission on the parent. Each directory inside a target that the user owns now gains owner rwx first, as hclean's `removePathForcibly` does. The change goes through a descriptor opened with `O_NOFOLLOW`, so a directory swapped for a symlink is refused. The target's parent is never changed.
 
 - `-w` wrote `.oclean.toml` into the working directory and ignored `--path`. It now writes into `--path`, and fails with `invalid path` when that is not a directory, matching hclean.
+
+- An unreadable directory was skipped silently. It now gives `oclean: warning: cannot read PATH: REASON` on stderr; the walk continues and the exit status is unchanged.
+
+- With `--older-than`, an old directory holding a recent file was removed. A directory target now passes only if every entry below it is old and readable.
+
+- Text output escapes file-name bytes 0x00-0x1f and 0x7f as `\xNN`, and backslash as `\\`, so a name cannot forge a line or send a terminal escape. JSON replaces each byte of invalid UTF-8 with U+FFFD; a non-UTF-8 name produced invalid JSON.
+
+- Removal followed a symlink that replaced a path component after the scan, so it could delete outside the root. It now opens each component below the root with `O_NOFOLLOW`, and refuses a target whose kind, device or inode differs from the scan (`replaced since the scan`). `src/at_stubs.c` provides the `*at` calls that OCaml's `unix` lacks.

@@ -36,3 +36,17 @@ let is_file path = Sys.file_exists path && not (Sys.is_directory path)
 
 let dedup xs =
   List.rev (List.fold_left (fun seen x -> if List.mem x seen then seen else x :: seen) [] xs)
+
+let needs_escape c = c < ' ' || c = '\127' || c = '\\'
+
+let escape name =
+  if not (String.exists needs_escape name) then name
+  else
+    let b = Buffer.create (String.length name + 8) in
+    String.iter
+      (fun c ->
+        if c = '\\' then Buffer.add_string b "\\\\"
+        else if needs_escape c then Printf.bprintf b "\\x%02x" (Char.code c)
+        else Buffer.add_char b c)
+      name;
+    Buffer.contents b

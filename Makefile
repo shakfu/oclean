@@ -5,12 +5,14 @@ FLAGS    := -w +a-4-9-40-41-42-44-45-70 -strict-sequence -I $(BUILD) -I +unix
 LIBS     := unix.cmxa
 
 # Modules in dependency order.
-LIB   := src/util.ml src/glob.ml src/options.ml src/target.ml src/preset.ml \
+LIB   := src/util.ml src/at.ml src/glob.ml src/options.ml src/target.ml src/preset.ml \
          src/scan.ml src/delete.ml src/style.ml src/report.ml src/config.ml
 APP   := bin/progress.ml bin/cli.ml
 TESTS := test/harness.ml test/test_util.ml test/test_glob.ml test/test_preset.ml \
          test/test_scan.ml test/test_report.ml test/test_config.ml test/test_delete.ml \
          test/test_cli.ml test/test_progress.ml test/test_main.ml test/run_tests.ml
+
+STUBS := $(BUILD)/at_stubs.o
 
 cmx = $(addprefix $(BUILD)/,$(notdir $(1:.ml=.cmx)))
 
@@ -28,13 +30,18 @@ endef
 
 all: oclean
 
-oclean: $(LIB) $(wildcard src/*.mli) $(APP) $(wildcard bin/*.mli) bin/main.ml
+# ocamlopt writes a C object into the working directory.
+$(STUBS): src/at_stubs.c
+	@mkdir -p $(BUILD)
+	cd $(BUILD) && $(OCAMLOPT) -ccopt -Wall -c $(CURDIR)/src/at_stubs.c
+
+oclean: $(LIB) $(wildcard src/*.mli) $(APP) $(wildcard bin/*.mli) bin/main.ml $(STUBS)
 	$(call compile,$(LIB) $(APP) bin/main.ml)
-	$(OCAMLOPT) $(FLAGS) -o $@ $(LIBS) $(call cmx,$(LIB) $(APP) bin/main.ml)
+	$(OCAMLOPT) $(FLAGS) -o $@ $(LIBS) $(STUBS) $(call cmx,$(LIB) $(APP) bin/main.ml)
 
 $(BUILD)/run_tests: oclean $(TESTS)
 	$(call compile,$(TESTS))
-	$(OCAMLOPT) $(FLAGS) -o $@ $(LIBS) $(call cmx,$(LIB) $(APP) $(TESTS))
+	$(OCAMLOPT) $(FLAGS) -o $@ $(LIBS) $(STUBS) $(call cmx,$(LIB) $(APP) $(TESTS))
 
 test: $(BUILD)/run_tests
 	OCLEAN=$(CURDIR)/oclean $(BUILD)/run_tests

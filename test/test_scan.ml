@@ -4,8 +4,8 @@ let relative root path =
   let n = String.length root + 1 in
   String.sub path n (String.length path - n)
 
-let scan ?on_visit ?on_match (o : Options.t) root patterns =
-  Scan.scan ?on_visit ?on_match o ~patterns:(globs patterns) ~excludes:(globs o.excludes) root
+let scan ?on_visit ?on_match ?on_warning (o : Options.t) root patterns =
+  Scan.scan ?on_visit ?on_match ?on_warning o ~patterns:(globs patterns) ~excludes:(globs o.excludes) root
 
 (* Scan [root] and return the matches as sorted (relative path, reason) pairs. *)
 let matches o root patterns =
@@ -68,12 +68,27 @@ let tests =
                 (sizes (scan defaults root [ "**/*.pyc"; "**/__pycache__" ]));
               check ~show "file size" [ 10 ] (sizes (scan defaults root [ "**/a.pyc" ]));
               check_bool "is a directory"
-                (List.for_all (fun (t : Target.t) -> t.is_dir) (scan defaults root [ "**/__pycache__" ]))));
+                (List.for_all (fun (t : Target.t) -> Target.is_dir t) (scan defaults root [ "**/__pycache__" ]))));
       it "only matches entries older than the age limit" (fun () ->
           with_tree project (fun root ->
+              Unix.utimes (root / "proj/sub/__pycache__/b.pyc") 1000000. 1000000.;
               Unix.utimes (root / "proj/sub/__pycache__") 1000000. 1000000.;
               check_matches "old one only" [ ("proj/sub/__pycache__", "**/__pycache__") ]
                 (matches { defaults with older_than = Some 3600 } root [ "**/__pycache__" ])));
+      it "keeps an old directory holding a recent entry" (fun () ->
+          with_tree [ ("old/deep/fresh", "1"); ("old/deep/x.pyc", "2") ] (fun root ->
+              List.iter (fun p -> Unix.utimes (root / p) 1000000. 1000000.) [ "old/deep/x.pyc"; "old/deep"; "old" ];
+              check_matches "only the old file inside" [ ("old/deep/x.pyc", "**/*.pyc") ]
+                (matches { defaults with older_than = Some 3600 } root [ "**/old"; "**/*.pyc" ])));
+      it "records the identity of each target" (fun () ->
+          with_tree project (fun root ->
+              let st = Unix.lstat (root / "proj/__pycache__") in
+              match scan defaults root [ "proj/__pycache__" ] with
+              | [ t ] ->
+                  check_bool "kind" (t.kind = S_DIR);
+                  check_int "device" st.st_dev t.dev;
+                  check_int "inode" st.st_ino t.ino
+              | ts -> fail "%d targets" (List.length ts)));
       it "ignores symlinks unless asked" (fun () ->
           with_tree project (fun root ->
               Unix.symlink (root / "proj/sub/keep.py") (root / "proj/link.py");
@@ -143,5 +158,22 @@ let tests =
               check_int "recursive size" 9 (Scan.directory_size (root / "d"))));
       it "survives unreadable directories" (fun () ->
           with_tree [ ("a/x.pyc", "1") ] (fun root ->
-              check_int "missing directory is empty" 0 (Scan.directory_size (root / "nope"))));
+              let warned = ref [] in
+              let on_warning p reason = warned := (p, reason) :: !warned in
+              check_int "missing directory is empty" 0 (Scan.directory_size ~on_warning (root / "nope"));
+              check_strings "warned" [ root / "nope" ] (List.map fst !warned)));
+      it "warns about an unreadable directory and continues" (fun () ->
+          if not (as_root ()) then
+            with_tree [ ("locked/x.pyc", "1"); ("ok/x.pyc", "2") ] (fun root ->
+                Unix.chmod (root / "locked") 0;
+                let warned = ref [] in
+                let found =
+                  Fun.protect
+                    ~finally:(fun () -> Unix.chmod (root / "locked") 0o755)
+                    (fun () ->
+                      scan ~on_warning:(fun p r -> warned := (p, r) :: !warned) defaults root [ "**/*.pyc" ])
+                in
+                check_strings "walk continued" [ root / "ok/x.pyc" ] (List.map (fun (t : Target.t) -> t.path) found);
+                check ~show:(fun xs -> String.concat "; " (List.map (pair str str) xs)) "warning"
+                  [ (root / "locked", "Permission denied") ] !warned));
     ]

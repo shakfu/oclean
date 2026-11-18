@@ -4,13 +4,13 @@ type t = { targets : Target.t list; total_size : int; stats : stat list }
 
 let sum_sizes = List.fold_left (fun n (t : Target.t) -> n + t.size) 0
 
-let summarize ?(measure = true) ?on_visit targets =
+let summarize ?(measure = true) ?on_visit ?on_warning targets =
   let targets =
     if not measure then targets
     else
       List.map
         (fun (t : Target.t) ->
-          if t.is_dir then { t with size = Scan.directory_size ?on_visit t.path } else t)
+          if Target.is_dir t then { t with size = Scan.directory_size ?on_visit ?on_warning t.path } else t)
         targets
   in
   let label (t : Target.t) = Target.label t.reason in
@@ -25,16 +25,19 @@ let summarize ?(measure = true) ?on_visit targets =
   }
 
 let format_size n =
-  let units = [ ("TB", 1_000_000_000_000); ("GB", 1_000_000_000); ("MB", 1_000_000); ("KB", 1_000) ] in
-  match List.find_opt (fun (_, scale) -> n >= scale) units with
-  | Some (unit, scale) -> Printf.sprintf "%.2f %s" (float_of_int n /. float_of_int scale) unit
-  | None -> Printf.sprintf "%d B" n
+  let rec scale x = function
+    | _ :: (_ :: _ as larger) when x >= 1024. -> scale (x /. 1024.) larger
+    | unit :: _ -> Printf.sprintf "%.2f %s" x unit
+    | [] -> assert false
+  in
+  if n < 1024 then Printf.sprintf "%d B" n else scale (float_of_int n /. 1024.) [ "KiB"; "MiB"; "GiB"; "TiB" ]
 
 let render_text ?(color = false) ~stats s =
   let b = Buffer.create 1024 in
   List.iter
     (fun (t : Target.t) ->
-      let path = if t.is_dir then Style.blue ~color t.path else t.path in
+      let path = Util.escape t.path in
+      let path = if Target.is_dir t then Style.blue ~color path else path in
       Printf.bprintf b "%s %s\n" (Style.dim ~color "Matched:") path)
     s.targets;
   if stats then
@@ -52,21 +55,32 @@ type json =
   | List of json list
   | Object of (string * json) list
 
-(* Control characters are escaped; other bytes pass through, which is valid in
-   a UTF-8 document. *)
+(* Control characters are escaped. Each byte of an invalid UTF-8 sequence
+   becomes U+FFFD, so the document is valid UTF-8. *)
 let escape b s =
-  String.iter
-    (function
-      | '"' -> Buffer.add_string b "\\\""
-      | '\\' -> Buffer.add_string b "\\\\"
-      | '\n' -> Buffer.add_string b "\\n"
-      | '\r' -> Buffer.add_string b "\\r"
-      | '\t' -> Buffer.add_string b "\\t"
-      | '\b' -> Buffer.add_string b "\\b"
-      | '\012' -> Buffer.add_string b "\\f"
-      | c when c < ' ' || c = '\127' -> Printf.bprintf b "\\u%04x" (Char.code c)
-      | c -> Buffer.add_char b c)
-    s
+  let rec go i =
+    if i < String.length s then
+      match s.[i] with
+      | '"' -> Buffer.add_string b "\\\""; go (i + 1)
+      | '\\' -> Buffer.add_string b "\\\\"; go (i + 1)
+      | '\n' -> Buffer.add_string b "\\n"; go (i + 1)
+      | '\r' -> Buffer.add_string b "\\r"; go (i + 1)
+      | '\t' -> Buffer.add_string b "\\t"; go (i + 1)
+      | '\b' -> Buffer.add_string b "\\b"; go (i + 1)
+      | '\012' -> Buffer.add_string b "\\f"; go (i + 1)
+      | c when c < ' ' || c = '\127' -> Printf.bprintf b "\\u%04x" (Char.code c); go (i + 1)
+      | c when c < '\128' -> Buffer.add_char b c; go (i + 1)
+      | _ ->
+          let d = String.get_utf_8_uchar s i in
+          if Uchar.utf_decode_is_valid d then (
+            let n = Uchar.utf_decode_length d in
+            Buffer.add_string b (String.sub s i n);
+            go (i + n))
+          else (
+            Buffer.add_utf_8_uchar b Uchar.rep;
+            go (i + 1))
+  in
+  go 0
 
 let rec write b = function
   | Bool x -> Buffer.add_string b (string_of_bool x)
@@ -109,7 +123,7 @@ let render_json ~dry_run ?(failures = []) ?(freed = 0) s =
       ]
   in
   let failure (f : Delete.failure) =
-    Object [ ("path", String f.target.path); ("error", String f.error) ]
+    Object [ ("path", String f.target.path); ("error", String (f.path ^ ": " ^ f.error)) ]
   in
   let doc =
     Object

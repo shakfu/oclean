@@ -66,6 +66,11 @@ let rec fresh_dir () =
   in
   match Sys.mkdir dir 0o755 with () -> dir | exception Sys_error _ -> fresh_dir ()
 
+(* A target for an existing [path], with the identity a scan records. *)
+let target_of ?(reason = Target.Pattern "x") path =
+  let st = Unix.lstat path in
+  { Target.path; kind = st.st_kind; dev = st.st_dev; ino = st.st_ino; reason; size = 0 }
+
 (* Populate a fresh temporary directory and pass its path to [f]. Entries
    ending in '/' become directories, the rest files with the given contents. *)
 let with_tree entries f =
@@ -78,7 +83,7 @@ let with_tree entries f =
         mkdir_p (Filename.dirname full);
         write_file full contents))
     entries;
-  Fun.protect ~finally:(fun () -> ignore (Delete.remove root)) (fun () -> f root)
+  Fun.protect ~finally:(fun () -> ignore (Delete.remove_all ~root:(Filename.dirname root) [ target_of root ])) (fun () -> f root)
 
 let in_directory dir f =
   let saved = Sys.getcwd () in

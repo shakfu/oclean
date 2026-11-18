@@ -64,6 +64,31 @@ let tests =
                         check_bool "failure in JSON"
                           (contains ~sub:("\"failures\":[{\"path\":\"" ^ (root / "t/ro/__pycache__")) r.out);
                         check_bool "later target removed" (not (Sys.file_exists (root / "t/rw/__pycache__")))))));
+      it "escapes names in matches and failures" (fun () ->
+          if not (as_root ()) then
+            with_tree [ ("t/ro/n\001\\.pyc", "1") ] (fun root ->
+                Unix.chmod (root / "t/ro") 0o555;
+                Fun.protect
+                  ~finally:(fun () -> Unix.chmod (root / "t/ro") 0o755)
+                  (fun () ->
+                    with_run ~cwd:root [ "-p"; "t"; "-y" ] (fun r ->
+                        let name = root / "t/ro/n\\x01\\\\.pyc" in
+                        check_int "exit" 1 r.code;
+                        check_bool "match escaped" (contains ~sub:("Matched: " ^ name ^ "\n") r.out);
+                        check_string "failure escaped" ("oclean: " ^ name ^ ": Permission denied\n") r.err))));
+      it "warns about an unreadable directory and continues" (fun () ->
+          if not (as_root ()) then
+            with_tree [ ("t/locked/x.pyc", "1"); ("t/b.pyc", "2") ] (fun root ->
+                Unix.chmod (root / "t/locked") 0;
+                Fun.protect
+                  ~finally:(fun () -> Unix.chmod (root / "t/locked") 0o755)
+                  (fun () ->
+                    with_run ~cwd:root [ "-p"; "t"; "-d" ] (fun r ->
+                        check_int "exit" 0 r.code;
+                        check_string "listing" (Printf.sprintf "Matched: %s\n" (root / "t/b.pyc")) r.out;
+                        check_string "warning"
+                          (Printf.sprintf "oclean: warning: cannot read %s: Permission denied\n" (root / "t/locked"))
+                          r.err))));
       it "discovers configuration in an ancestor" (fun () ->
           with_tree [ (".oclean.toml", "patterns = [\"**/*.marker\"]\n"); ("n/d/x.marker", "") ] (fun root ->
               with_run ~cwd:(root / "n/d") [ "-c"; "-d" ] (fun r ->

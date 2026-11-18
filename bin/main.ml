@@ -9,6 +9,9 @@ let err_color = ref (colored Auto Unix.stderr)
 
 let error_line msg = Style.red ~color:!err_color "oclean:" ^ " " ^ msg
 
+let warn p path reason =
+  Progress.note p (error_line (Printf.sprintf "warning: cannot read %s: %s" (Util.escape path) reason))
+
 let die msg =
   prerr_endline (error_line msg);
   exit 1
@@ -52,7 +55,7 @@ let confirm (opts : Options.t) count =
 let measured (opts : Options.t) = opts.stats || opts.format = Json
 
 (* [None] when nothing was attempted. Otherwise the failures and bytes freed. *)
-let remove (inv : Cli.t) (opts : Options.t) (targets : Target.t list) =
+let remove (inv : Cli.t) (opts : Options.t) ~root (targets : Target.t list) =
   let total = List.length targets in
   if opts.dry_run || total = 0 || not (confirm opts total) then None
   else
@@ -67,10 +70,10 @@ let remove (inv : Cli.t) (opts : Options.t) (targets : Target.t list) =
         let on_remove (t : Target.t) =
           Progress.set_bar p !started total;
           incr started;
-          if inv.verbose then Progress.note p ("removing " ^ t.path)
+          if inv.verbose then Progress.note p ("removing " ^ Util.escape t.path)
         in
         let failures =
-          Delete.remove_all ~on_remove ~on_visit:(Progress.show p)
+          Delete.remove_all ~root ~on_remove ~on_visit:(Progress.show p)
             ~on_freed:(fun n -> freed := !freed + n)
             targets
         in
@@ -80,7 +83,7 @@ let remove (inv : Cli.t) (opts : Options.t) (targets : Target.t list) =
 
 let root_or_die opts =
   let dir = Options.root opts in
-  if not (Sys.file_exists dir && Sys.is_directory dir) then die ("invalid path: " ^ dir);
+  if not (Sys.file_exists dir && Sys.is_directory dir) then die ("invalid path: " ^ Util.escape dir);
   dir
 
 let clean (inv : Cli.t) (opts : Options.t) patterns excludes =
@@ -93,30 +96,30 @@ let clean (inv : Cli.t) (opts : Options.t) patterns excludes =
       ~summary:(fun n -> Some (Printf.sprintf "scanned %d entries" n))
       (fun p ->
         let note msg = if inv.verbose then Progress.note p msg in
-        note ("root: " ^ root);
+        note ("root: " ^ Util.escape root);
         note ("patterns: " ^ String.concat ", " (List.map Glob.source patterns));
         let on_match (t : Target.t) =
           incr matches;
-          note (Printf.sprintf "match: %s (%s)" t.path (Target.label t.reason))
+          note (Printf.sprintf "match: %s (%s)" (Util.escape t.path) (Target.label t.reason))
         in
-        let targets = Scan.scan ~on_visit:(Progress.tick p) ~on_match opts ~patterns ~excludes root in
+        let targets = Scan.scan ~on_visit:(Progress.tick p) ~on_match ~on_warning:(warn p) opts ~patterns ~excludes root in
         Progress.set_message p (fun _ -> "measuring sizes");
-        Report.summarize ~measure:(measured opts) ~on_visit:(Progress.show p)
+        Report.summarize ~measure:(measured opts) ~on_visit:(Progress.show p) ~on_warning:(warn p)
           (List.sort (fun (a : Target.t) b -> String.compare a.path b.path) targets))
   in
   let failures =
     match opts.format with
     | Text -> (
         if not opts.quiet then print_string (Report.render_text ~color ~stats:opts.stats summary);
-        match remove inv opts summary.targets with
+        match remove inv opts ~root summary.targets with
         | None -> []
         | Some (failures, freed) ->
             let count = List.length summary.targets - List.length failures in
             if not opts.quiet then print_string (Report.render_removed ~color ~count ~freed ());
-            List.iter (fun (f : Delete.failure) -> prerr_endline (error_line f.error)) failures;
+            List.iter (fun (f : Delete.failure) -> prerr_endline (error_line (Util.escape f.path ^ ": " ^ f.error))) failures;
             failures)
     | Json ->
-        let failures, freed = Option.value ~default:([], 0) (remove inv opts summary.targets) in
+        let failures, freed = Option.value ~default:([], 0) (remove inv opts ~root summary.targets) in
         print_endline (Report.render_json ~dry_run:opts.dry_run ~failures ~freed summary);
         failures
   in
@@ -135,11 +138,11 @@ let main () =
       | Write_config ->
           let file = Filename.concat (root_or_die opts) Config.file_name in
           if not (Config.write_default file) then
-            die (Printf.sprintf "cannot overwrite existing '%s' file" file)
+            die (Printf.sprintf "cannot overwrite existing '%s' file" (Util.escape file))
       | List_patterns -> List.iter (fun g -> print_endline (Glob.source g)) patterns
       | Clean | Show_help | Show_version -> clean inv opts patterns excludes)
 
 let () =
   try main () with
   | Sys_error msg -> die msg
-  | Unix.Unix_error (e, _, arg) -> die (arg ^ ": " ^ Unix.error_message e)
+  | Unix.Unix_error (e, _, arg) -> die (Util.escape arg ^ ": " ^ Unix.error_message e)

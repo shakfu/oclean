@@ -1,6 +1,7 @@
 open Harness
 
-let target path is_dir pattern size = { Target.path; is_dir; reason = Pattern pattern; size }
+let target path is_dir pattern size =
+  { Target.path; kind = (if is_dir then S_DIR else S_REG); dev = 0; ino = 0; reason = Pattern pattern; size }
 
 let sample =
   [
@@ -26,12 +27,14 @@ let tests =
       it "formats byte counts with decimal units" (fun () ->
           check_string "zero" "0 B" (Report.format_size 0);
           check_string "bytes" "100 B" (Report.format_size 100);
-          check_string "exact KB" "1.00 KB" (Report.format_size 1000);
-          check_string "fractional KB" "1.02 KB" (Report.format_size 1024);
-          check_string "rounded KB" "4.88 KB" (Report.format_size 4876);
-          check_string "MB" "1.05 MB" (Report.format_size 1048576);
-          check_string "GB" "2.50 GB" (Report.format_size 2_500_000_000);
-          check_string "TB" "1.10 TB" (Report.format_size 1099511627776));
+          check_string "largest bytes" "1023 B" (Report.format_size 1023);
+          check_string "exact KiB" "1.00 KiB" (Report.format_size 1024);
+          check_string "rounded KiB" "1.95 KiB" (Report.format_size 2000);
+          check_string "rounds up within KiB" "1024.00 KiB" (Report.format_size 1048575);
+          check_string "MiB" "1.00 MiB" (Report.format_size 1048576);
+          check_string "GiB" "2.33 GiB" (Report.format_size 2_500_000_000);
+          check_string "TiB" "1.00 TiB" (Report.format_size 1099511627776);
+          check_string "stops at TiB" "2048.00 TiB" (Report.format_size (2048 * 1099511627776)));
       it "lists matches as text" (fun () ->
           check_string "listing"
             "Matched: /tmp/p/.DS_Store\n\
@@ -44,13 +47,13 @@ let tests =
              Matched: /tmp/p/__pycache__\n\
              Matched: /tmp/p/other/__pycache__\n\
             \  **/.DS_Store: 1 item(s), 0 B\n\
-            \  **/__pycache__: 2 item(s), 6.00 KB\n"
+            \  **/__pycache__: 2 item(s), 5.86 KiB\n"
             (Report.render_text ~stats:true summary));
       it "colours directories, sizes and the removal line" (fun () ->
           let out = Report.render_text ~color:true ~stats:true summary in
           has out "\027[2mMatched:\027[0m /tmp/p/.DS_Store\n";
           has out "\027[2mMatched:\027[0m \027[1;34m/tmp/p/__pycache__\027[0m\n";
-          has out "2 item(s), \027[1m6.00 KB\027[0m\n";
+          has out "2 item(s), \027[1m5.86 KiB\027[0m\n";
           check_string "removed" "\027[32mRemoved 1 item(s), 0 B.\027[0m\n"
             (Report.render_removed ~color:true ~count:1 ~freed:0 ()));
       it "decides when to colour" (fun () ->
@@ -75,7 +78,7 @@ let tests =
               "\"size\":5000";
               "\"total_count\":3";
               "\"total_size\":6000";
-              "\"total_size_human\":\"6.00 KB\"";
+              "\"total_size_human\":\"5.86 KiB\"";
               "\"dry_run\":true";
               "\"count\":2";
               "\"failures\":[]";
@@ -83,13 +86,15 @@ let tests =
       it "reports the bytes freed" (fun () ->
           let out = Report.render_json ~dry_run:false ~freed:5000 summary in
           has out "\"freed_size\":5000";
-          has out "\"freed_size_human\":\"5.00 KB\"";
+          has out "\"freed_size_human\":\"4.88 KiB\"";
           has (Report.render_json ~dry_run:true summary) "\"freed_size\":0";
-          check_string "text line" "Removed 3 item(s), 5.00 KB.\n" (Report.render_removed ~count:3 ~freed:5000 ()));
+          check_string "text line" "Removed 3 item(s), 4.88 KiB.\n" (Report.render_removed ~count:3 ~freed:5000 ()));
       it "reports dry_run as false when deleting" (fun () ->
           has (Report.render_json ~dry_run:false summary) "\"dry_run\":false");
       it "reports removal failures" (fun () ->
-          let failures = [ { Delete.target = List.hd sample; error = "/tmp/p/.DS_Store: Permission denied" } ] in
+          let failures =
+            [ { Delete.target = List.hd sample; path = "/tmp/p/.DS_Store"; error = "Permission denied" } ]
+          in
           has (Report.render_json ~dry_run:false ~failures summary)
             "\"failures\":[{\"path\":\"/tmp/p/.DS_Store\",\"error\":\"/tmp/p/.DS_Store: Permission denied\"}]");
       it "escapes JSON strings" (fun () ->
@@ -101,6 +106,12 @@ let tests =
           has out "d\\te";
           has out "\\u0001";
           check_bool "no raw control character" (not (contains ~sub:"\001" out)));
+      it "replaces each byte of invalid UTF-8 in JSON" (fun () ->
+          let s = { Report.targets = [ target "ok\xc3\xa9 bad\xff\xe2\x82!" false "p" 0 ]; total_size = 0; stats = [] } in
+          has (Report.render_json ~dry_run:true s) "ok\xc3\xa9 bad\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd!");
+      it "escapes control characters and backslashes in text" (fun () ->
+          let s = { Report.targets = [ target "a\nb\027[c\\d\x7f\xc3\xa9" false "p" 0 ]; total_size = 0; stats = [] } in
+          check_string "escaped" "Matched: a\\x0ab\\x1b[c\\\\d\\x7f\xc3\xa9\n" (Report.render_text ~stats:false s));
       it "measures directories when summarising" (fun () ->
           with_tree [ ("cache/a.pyc", "0123456789"); ("cache/deep/b.pyc", "01234"); ("loose.txt", "xy") ]
             (fun root ->

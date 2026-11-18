@@ -71,7 +71,7 @@ let repaint t =
         ("\r"
         ^ indicator_line ?bar:t.bar t.width (spinner_frame t.frame)
             (t.message t.count ^ ", " ^ elapsed (now -. t.started))
-            t.path);
+            (Util.escape t.path));
       flush stderr;
       t.frame <- t.frame + 1;
       t.painted <- true;
